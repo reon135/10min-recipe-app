@@ -131,18 +131,51 @@ document.addEventListener('DOMContentLoaded', () => {
     // ========== レシピ検索 ==========
     function searchRecipes() {
         const selected = state.selectedIngredients;
+        // 調味料は一致度計算から除外（メイン食材のみで判定）
+        const CONDIMENTS = new Set([
+            'soy-sauce', 'miso', 'mentsuyu', 'sesame-oil',
+            'mayonnaise', 'ketchup', 'butter', 'garlic', 'ginger',
+            'green-onion'
+        ]);
+
         const scored = RECIPES.map(recipe => {
-            const matchCount = recipe.ingredients.filter(i => selected.has(i)).length;
-            const matchRate = matchCount / recipe.ingredients.length;
-            return { ...recipe, matchCount, matchRate };
+            // メイン食材のみ抽出
+            const mainIngredients = recipe.ingredients.filter(i => !CONDIMENTS.has(i));
+            const condimentIngredients = recipe.ingredients.filter(i => CONDIMENTS.has(i));
+
+            const mainMatchCount = mainIngredients.filter(i => selected.has(i)).length;
+            const condimentMatchCount = condimentIngredients.filter(i => selected.has(i)).length;
+            const totalMatchCount = mainMatchCount + condimentMatchCount;
+
+            // メイン食材の一致率で判定（調味料は加点のみ）
+            const mainMatchRate = mainIngredients.length > 0
+                ? mainMatchCount / mainIngredients.length
+                : 0;
+
+            // スコア: メイン一致率を重視 + 調味料ボーナス
+            const score = mainMatchRate * 100 + condimentMatchCount * 5;
+
+            return {
+                ...recipe,
+                matchCount: totalMatchCount,
+                mainMatchCount,
+                mainMatchRate,
+                matchRate: recipe.ingredients.length > 0
+                    ? totalMatchCount / recipe.ingredients.length
+                    : 0,
+                score
+            };
         });
 
         scored.sort((a, b) => {
-            if (b.matchCount !== a.matchCount) return b.matchCount - a.matchCount;
-            return b.matchRate - a.matchRate;
+            if (b.score !== a.score) return b.score - a.score;
+            return b.mainMatchCount - a.mainMatchCount;
         });
 
-        const results = scored.filter(r => r.matchCount >= 1);
+        // メイン食材が最低1つ一致 かつ メイン一致率30%以上、またはメイン食材2つ以上一致
+        const results = scored.filter(r =>
+            r.mainMatchCount >= 1 && (r.mainMatchRate >= 0.3 || r.mainMatchCount >= 2)
+        );
         return results;
     }
 
