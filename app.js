@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalClose = document.getElementById('modalClose');
     const customIngredient = document.getElementById('customIngredient');
     const addCustomBtn = document.getElementById('addCustomBtn');
+    const clearAllBtn = document.getElementById('clearAllBtn');
     const categoryTabs = document.querySelectorAll('.tab');
 
     // ========== 食材グリッド描画 ==========
@@ -30,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <button class="ingredient-btn ${state.selectedIngredients.has(ing.id) ? 'selected' : ''}"
                     data-id="${ing.id}">
                 <span class="check">✓</span>
-                <span class="emoji">${ing.emoji}</span>
+                <img class="photo" src="${ing.photo}" alt="${ing.name}" loading="lazy" onerror="this.style.background='var(--bg)'; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22><rect fill=%22%23f0ece4%22 width=%2248%22 height=%2248%22 rx=%2224%22/><text x=%2224%22 y=%2230%22 text-anchor=%22middle%22 font-size=%2220%22>🍴</text></svg>'">
                 <span class="name">${ing.name}</span>
             </button>
         `).join('');
@@ -72,9 +73,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const tags = [];
         state.selectedIngredients.forEach(id => {
             const ing = INGREDIENTS.find(i => i.id === id);
-            const name = ing ? `${ing.emoji} ${ing.name}` : `🏷️ ${id}`;
+            const name = ing ? ing.name : id;
+            const photo = ing ? ing.photo : '';
             tags.push(`
                 <span class="selected-tag" data-id="${id}">
+                    ${photo ? `<img class="tag-photo" src="${photo}" alt="${name}" loading="lazy">` : ''}
                     ${name}
                     <span class="remove">&times;</span>
                 </span>
@@ -91,6 +94,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderSelectedTags();
                 updateSearchBtn();
             });
+        });
+    }
+
+    // ========== 全解除 ==========
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', () => {
+            state.selectedIngredients.clear();
+            renderIngredients();
+            renderSelectedTags();
+            updateSearchBtn();
         });
     }
 
@@ -124,13 +137,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return { ...recipe, matchCount, matchRate };
         });
 
-        // マッチ数でソート（同スコアなら一致率順）
         scored.sort((a, b) => {
             if (b.matchCount !== a.matchCount) return b.matchCount - a.matchCount;
             return b.matchRate - a.matchRate;
         });
 
-        // 1つ以上マッチするもの
         const results = scored.filter(r => r.matchCount >= 1);
         return results;
     }
@@ -139,8 +150,6 @@ document.addEventListener('DOMContentLoaded', () => {
     searchBtn.addEventListener('click', () => {
         const results = searchRecipes();
         renderResults(results);
-
-        // スクロール
         resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
@@ -152,7 +161,9 @@ document.addEventListener('DOMContentLoaded', () => {
             resultsInfo.innerHTML = '';
             recipeCards.innerHTML = `
                 <div class="no-results">
-                    <div class="emoji">😢</div>
+                    <div class="no-results-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    </div>
                     <h3>レシピが見つかりませんでした</h3>
                     <p>他の食材を追加してみてください</p>
                 </div>
@@ -160,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        resultsInfo.innerHTML = `✨ <strong>${results.length}件</strong>のレシピが見つかりました！食材の一致度順に表示しています。`;
+        resultsInfo.innerHTML = `<strong>${results.length}件</strong>のレシピが見つかりました`;
 
         recipeCards.innerHTML = results.map(recipe => {
             const matchPercent = Math.round(recipe.matchRate * 100);
@@ -169,12 +180,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return `
                 <div class="recipe-card" data-id="${recipe.id}">
-                    <div class="recipe-card-image-placeholder">${recipe.emoji}</div>
+                    <div class="recipe-card-image-placeholder">
+                        <img src="${recipe.cardImage}" alt="${recipe.name}" loading="lazy" onerror="this.parentElement.style.background='linear-gradient(145deg, #f0ece4, #e8e4dc)'">
+                        <span class="time-badge">${recipe.time} min</span>
+                        <span class="difficulty-badge">${recipe.difficulty}</span>
+                    </div>
                     <div class="recipe-card-body">
-                        <div class="recipe-card-header">
-                            <h3 class="recipe-card-title">${recipe.name}</h3>
-                            <span class="recipe-card-time">⏱ ${recipe.time}分</span>
-                        </div>
+                        <h3 class="recipe-card-title">${recipe.name}</h3>
                         <p class="recipe-card-desc">${recipe.description}</p>
                         <div class="recipe-card-tags">
                             ${matchedIngredients.map(id => {
@@ -187,7 +199,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             }).join('')}
                         </div>
                         <div class="recipe-card-footer">
-                            <span class="match-rate">食材一致度 ${matchPercent}%</span>
+                            <span class="match-rate">
+                                一致度 ${matchPercent}%
+                                <span class="match-rate-bar"><span class="match-rate-fill" style="width:${matchPercent}%"></span></span>
+                            </span>
                             <span class="view-recipe">詳しく見る →</span>
                         </div>
                     </div>
@@ -209,23 +224,36 @@ document.addEventListener('DOMContentLoaded', () => {
     function openModal(recipe) {
         modalContent.innerHTML = `
             <div class="modal-hero">
-                ${recipe.emoji}
+                <img src="${recipe.heroImage}" alt="${recipe.name}" onerror="this.style.background='linear-gradient(145deg, #f0ece4, #e8e4dc)'">
+                <div class="modal-hero-gradient"></div>
                 <div class="modal-hero-overlay">
                     <h2>${recipe.name}</h2>
                 </div>
             </div>
             <div class="modal-body">
                 <div class="modal-meta">
-                    <span class="meta-item"><span class="meta-icon">⏱</span> ${recipe.time}分</span>
-                    <span class="meta-item"><span class="meta-icon">📊</span> ${recipe.difficulty}</span>
-                    <span class="meta-item"><span class="meta-icon">🍽️</span> ${recipe.servings}</span>
+                    <span class="meta-item">
+                        <span class="meta-icon-circle">⏱</span>
+                        <span>${recipe.time}分</span>
+                    </span>
+                    <span class="meta-item">
+                        <span class="meta-icon-circle">📊</span>
+                        <span>${recipe.difficulty}</span>
+                    </span>
+                    <span class="meta-item">
+                        <span class="meta-icon-circle">🍽</span>
+                        <span>${recipe.servings}</span>
+                    </span>
                 </div>
 
-                <p style="font-size:14px; color:#636E72; margin-bottom:20px; line-height:1.6;">${recipe.description}</p>
+                <p style="font-size:14px; color:var(--text-secondary); margin-bottom:24px; line-height:1.7;">${recipe.description}</p>
 
                 <!-- 材料 -->
                 <div class="modal-section">
-                    <h3 class="modal-section-title">🥗 材料</h3>
+                    <h3 class="modal-section-title">
+                        材料
+                        <span class="title-line"></span>
+                    </h3>
                     <div class="ingredients-list">
                         ${recipe.ingredientDetails.map(item => {
                             const isHave = state.selectedIngredients.has(
@@ -233,9 +261,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             );
                             return `
                                 <div class="ingredient-item ${isHave ? 'have' : 'need'}">
-                                    <span class="item-icon">${item.icon}</span>
-                                    <span>${item.name}</span>
-                                    <span style="margin-left:auto; color:#636E72; font-size:12px;">${item.amount}</span>
+                                    <img class="item-photo" src="${item.photo}" alt="${item.name}" loading="lazy" onerror="this.style.display='none'">
+                                    <span class="item-name">${item.name}</span>
+                                    <span class="item-amount">${item.amount}</span>
                                 </div>
                             `;
                         }).join('')}
@@ -244,15 +272,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 <!-- 手順 -->
                 <div class="modal-section">
-                    <h3 class="modal-section-title">👨‍🍳 作り方</h3>
+                    <h3 class="modal-section-title">
+                        作り方
+                        <span class="title-line"></span>
+                    </h3>
                     <div class="steps-list">
                         ${recipe.steps.map((step, idx) => `
                             <div class="step-card">
-                                <div class="step-number">${idx + 1}</div>
+                                <div class="step-left">
+                                    <div class="step-number">${idx + 1}</div>
+                                    ${idx < recipe.steps.length - 1 ? '<div class="step-line"></div>' : ''}
+                                </div>
                                 <div class="step-content">
                                     <div class="step-text">${step.text}</div>
-                                    <div class="step-image-placeholder">${step.emoji}</div>
-                                    ${step.tip ? `<div class="step-tip">${step.tip}</div>` : ''}
+                                    ${step.image ? `
+                                        <div class="step-image-container">
+                                            <img src="${step.image}" alt="ステップ${idx + 1}" loading="lazy" onerror="this.parentElement.style.display='none'">
+                                        </div>
+                                    ` : ''}
+                                    ${step.tip ? `<div class="step-tip">💡 ${step.tip}</div>` : ''}
                                 </div>
                             </div>
                         `).join('')}
@@ -261,11 +299,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 <!-- ポイント -->
                 <div class="modal-section">
-                    <h3 class="modal-section-title">💡 アレンジ＆ポイント</h3>
+                    <h3 class="modal-section-title">
+                        アレンジ＆ポイント
+                        <span class="title-line"></span>
+                    </h3>
                     <div class="tips-box">
                         ${recipe.tips.map(tip => `
                             <div class="tip-item">
-                                <span>•</span>
+                                <span class="tip-bullet"></span>
                                 <span>${tip}</span>
                             </div>
                         `).join('')}
